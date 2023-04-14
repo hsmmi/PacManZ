@@ -5,6 +5,9 @@ class agent:
     def __init__(self, PacManZ) -> None:
         self.packmanz = PacManZ
         self.pos_agent = np.zeros((1, 2))
+        # self.pre_pos_agent = np.zeros((1, 2))
+        self.iteration = 0
+        self.max_iteration = 1000
         self.n_shot = 0
         """
             Feature of agent:
@@ -22,7 +25,7 @@ class agent:
         ok    11. can_shot(low)
         """
         self.feature_agent = np.random.rand(13)
-        self.feature_agent[0] = 100  # Get far from zombie
+        self.feature_agent[0] = 1000  # Get far from zombie
         self.feature_agent[1] = -100  # Prefer to get away from pit
         self.feature_agent[3] = -100  # Get near to exit port
         self.feature_agent[4] = -10000  # Get near to vaccine
@@ -33,6 +36,7 @@ class agent:
         x, y = self.packmanz.board.random_blank_cell()
         self.packmanz.board.board[x, y] = "A"
         self.pos_agent = np.array([x, y])
+        self.pre_pos_agent = np.array([x, y])
 
     def can_agent_go(self, x, y) -> bool:
         if (
@@ -50,9 +54,14 @@ class agent:
 
     def possible_agent_move(self) -> list:
         possible_move = []
-        D = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        D = np.array([(-1, 0), (1, 0), (0, -1), (0, 1)])
 
-        for i in range(4):
+        # # Delete previous cell not avoid loop
+        # D_pre = self.pre_pos_agent - self.pos_agent
+        # # Remove D_pre from D if exist
+        # D = np.delete(D, np.where((D == D_pre).all(axis=1)), axis=0)
+
+        for i in range(len(D)):
             new_pos = self.pos_agent[0] + D[i][0], self.pos_agent[1] + D[i][1]
             if self.can_agent_go(new_pos[0], new_pos[1]):
                 is_safe = True
@@ -78,7 +87,7 @@ class agent:
         distance_to_nearest_zombie = 1000
         sum_distance_to_zombies = 0
         for i in range(self.packmanz.n_zombie):
-            dis = self.packmanz.board.man_distance(
+            dis = self.packmanz.board.euc_distance(
                 self.pos_agent[0],
                 self.pos_agent[1],
                 self.packmanz.zombie[i].pos_zombie[0],
@@ -108,14 +117,14 @@ class agent:
             self.packmanz.board.pit[1],
         )
 
-        distance_to_exit_port = self.packmanz.board.man_distance(
+        distance_to_exit_port = self.packmanz.board.BFS_distance(
             self.pos_agent[0],
             self.pos_agent[1],
             self.packmanz.board.exit_port[0],
             self.packmanz.board.exit_port[1],
         )
 
-        distance_to_vaccine = self.packmanz.board.man_distance(
+        distance_to_vaccine = self.packmanz.board.BFS_distance(
             self.pos_agent[0],
             self.pos_agent[1],
             self.packmanz.board.vaccine[0],
@@ -171,10 +180,10 @@ class agent:
     def choose_agent_action(self) -> tuple:
         possible_move = self.possible_agent_move()
         if len(possible_move) == 0:
-            return (0, 0)
+            return [0, 0]
 
-        max_state_value = -1000000
-        max_move = (0, 0)
+        max_state_value = -np.inf
+        max_move = [0, 0]
         for move in possible_move:
             ch = self.packmanz.board.board[
                 self.pos_agent[0] + move[0], self.pos_agent[1] + move[1]
@@ -205,23 +214,45 @@ class agent:
 
     def move_agent(self) -> float:
         move_agent, state_value_agent = self.choose_agent_action()
-        if move_agent == 0:
+        if (
+            (type(move_agent) == np.ndarray and (move_agent == [0, 0]).all())
+            or (type(move_agent) == int)
+            or self.iteration > self.max_iteration
+        ):
             print("Agent can't move")
             exit()  # Update weight
-        self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]] = "B"
+        # self.pre_pos_agent = self.pos_agent.copy()
+
+        self.iteration += 1
+
+        # update label pos agent before moving agent
+        if (self.pos_agent == self.packmanz.board.exit_port).all():
+            self.packmanz.board.board[
+                self.pos_agent[0], self.pos_agent[1]
+            ] = "E"
+        else:
+            self.packmanz.board.board[
+                self.pos_agent[0], self.pos_agent[1]
+            ] = "B"
+
+        # move agent
         self.pos_agent[0] += move_agent[0]
         self.pos_agent[1] += move_agent[1]
+
+        # Update status after moving agent
         if (
             self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]]
             == "V"
         ):
             self.packmanz.board.has_vaccine = True
             self.packmanz.board.generate_vaccine()
-        if (
+        elif (
             self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]]
             == "Z"
+            and self.packmanz.board.has_vaccine
         ):
             self.packmanz.board.has_vaccine = False
+            # Delete zombie
             for i in range(self.packmanz.n_zombie):
                 if (
                     self.packmanz.zombie[i].pos_zombie == self.pos_agent
@@ -229,7 +260,21 @@ class agent:
                     self.packmanz.zombie[i] = self.packmanz.zombie[-1]
                     self.packmanz.zombie.pop()
                     self.packmanz.n_zombie -= 1
+                    # Check if no zombie left and update feature to go exit port
+                    if self.packmanz.n_zombie == 0:
+                        self.feature_agent[3] = -100000  # Go to exit port
                     break
+
+        # Check if all zombies are killed and agent is in exit port
+        if (
+            self.packmanz.n_zombie == 0
+            and (self.pos_agent == self.packmanz.board.exit_port).all()
+        ):
+            self.packmanz.board.board[
+                self.pos_agent[0], self.pos_agent[1]
+            ] = "A"
+            print("Bar Table Shadane Bekooob =)")
+            exit()  # Update weight
 
         self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]] = "A"
 

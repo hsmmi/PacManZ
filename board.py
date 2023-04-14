@@ -73,6 +73,7 @@ class board:
 
     def BFS_distance(self, x1, y1, x2, y2) -> float:
         # BFS on the board from (x1, y1) to (x2, y2)
+        # valid move: "B", "V", "E" and should not be neighbour of "Z"
         queue = [(x1, y1)]
         visited = set()
         visited.add((x1, y1))
@@ -84,11 +85,21 @@ class board:
                 if x == x2 and y == y2:
                     return distance
                 for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-                    if (x + dx, y + dy) not in visited and self.board[
-                        x + dx, y + dy
-                    ] == "B":
-                        queue.append((x + dx, y + dy))
-                        visited.add((x + dx, y + dy))
+                    # new_cell = (x + dx, y + dy)
+                    if (
+                        self.board[x + dx, y + dy] == "B"
+                        or self.board[x + dx, y + dy] == "V"
+                        or self.board[x + dx, y + dy] == "E"
+                    ):
+                        is_safe = True
+                        for dx2, dy2 in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                            if self.board[x + dx + dx2, y + dy + dy2] == "Z":
+                                is_safe = False
+                                break
+                        if is_safe and (x + dx, y + dy) not in visited:
+                            queue.append((x + dx, y + dy))
+                            visited.add((x + dx, y + dy))
+
         return distance
 
     def print_board(self) -> None:
