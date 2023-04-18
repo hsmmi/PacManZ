@@ -2,280 +2,397 @@ import numpy as np
 
 
 class agent:
-    def __init__(self, PacManZ) -> None:
-        self.packmanz = PacManZ
-        self.pos_agent = np.zeros((1, 2))
-        # self.pre_pos_agent = np.zeros((1, 2))
-        self.iteration = 0
-        self.max_iteration = 1000
-        self.n_shot = 0
-        """
-            Feature of agent:
-        ok    00. Distance to the nearest zombie(high if agent don't have vaccine)
-        ok    01. Distance to the pit(high)
-        ok    02. Distance to the nearest obstcale(high)
-        ok    03. Distance to the exit port(low)
-        ok    04. Distance to the vaccine(low)
-        ok    05. Number of shot(high)
-        ok    06. Number of zombie(low)
-        ok    07. Sum of distance to all zombies(low)
-        ok    08. Sum of distance to all obstcales(low)
-        ok    09. has vaccine(true)
-        ok    10. possible move(high)
-        ok    11. can_shot(low)
-        """
-        self.feature_agent = np.random.rand(13)
-        self.feature_agent[0] = 1000  # Get far from zombie
-        self.feature_agent[1] = -100  # Prefer to get away from pit
-        self.feature_agent[3] = -100  # Get near to exit port
-        self.feature_agent[4] = -10000  # Get near to vaccine
-        # self.feature_agent[7] = 20  # Get far from all zombies
-        self.feature_agent[8] = 5  # Get far from all obstcales
+    def __init__(self, pacmanz):
+        self.pacmanz = pacmanz
+        self.position_agent = self.pacmanz.board.find_empty_cell()
+        self.pacmanz.board.board[
+            self.position_agent[0], self.position_agent[1]
+        ] = self.pacmanz.board.s_agent
 
-    def generate_agent(self) -> None:
-        x, y = self.packmanz.board.random_blank_cell()
-        self.packmanz.board.board[x, y] = "A"
-        self.pos_agent = np.array([x, y])
-        self.pre_pos_agent = np.array([x, y])
+        pass
 
-    def can_agent_go(self, x, y) -> bool:
+    def reset(self):
+        self.position_agent = self.pacmanz.board.find_empty_cell()
+        self.pacmanz.board.board[
+            self.position_agent[0], self.position_agent[1]
+        ] = self.pacmanz.board.s_agent
+
+    def can_agent_go(self, x, y, agent_has_vaccine):
+        """
+        check if agent can go to the cell
+        """
         if (
-            self.packmanz.board.board[x, y] == "B"
-            or self.packmanz.board.board[x, y] == "V"
-            or self.packmanz.board.board[x, y] == "E"
-            or (
-                self.packmanz.board.has_vaccine
-                and self.packmanz.board.board[x, y] == "Z"
-            )
+            self.pacmanz.board.board[x, y] == self.pacmanz.board.s_margin
+            or self.pacmanz.board.board[x, y] == self.pacmanz.board.s_obstacle
         ):
+            return False
+        if agent_has_vaccine:
             return True
         else:
-            return False
-
-    def possible_agent_move(self) -> list:
-        possible_move = []
-        D = np.array([(-1, 0), (1, 0), (0, -1), (0, 1)])
-
-        # # Delete previous cell not avoid loop
-        # D_pre = self.pre_pos_agent - self.pos_agent
-        # # Remove D_pre from D if exist
-        # D = np.delete(D, np.where((D == D_pre).all(axis=1)), axis=0)
-
-        for i in range(len(D)):
-            new_pos = self.pos_agent[0] + D[i][0], self.pos_agent[1] + D[i][1]
-            if self.can_agent_go(new_pos[0], new_pos[1]):
-                is_safe = True
-                for j in range(self.packmanz.n_zombie):
-                    if (
-                        self.packmanz.board.man_distance(
-                            new_pos[0],
-                            new_pos[1],
-                            self.packmanz.zombie[j].pos_zombie[0],
-                            self.packmanz.zombie[j].pos_zombie[1],
-                        )
-                        < 2
-                        and self.packmanz.board.has_vaccine == False
-                    ):
-                        is_safe = False
-                        break
-                if is_safe:
-                    possible_move.append(D[i])
-
-        return possible_move
-
-    def agent_state_value(self) -> float:
-        distance_to_nearest_zombie = 1000
-        sum_distance_to_zombies = 0
-        for i in range(self.packmanz.n_zombie):
-            dis = self.packmanz.board.euc_distance(
-                self.pos_agent[0],
-                self.pos_agent[1],
-                self.packmanz.zombie[i].pos_zombie[0],
-                self.packmanz.zombie[i].pos_zombie[1],
-            )
-            sum_distance_to_zombies += dis
-            if dis < distance_to_nearest_zombie:
-                distance_to_nearest_zombie = dis
-
-        distance_to_nearest_obstcale = 1000
-        sum_distance_to_obstcales = 0
-        for i in range(self.packmanz.board.n_obstcale):
-            dis = self.packmanz.board.man_distance(
-                self.pos_agent[0],
-                self.pos_agent[1],
-                self.packmanz.board.obstcales[i, 0],
-                self.packmanz.board.obstcales[i, 1],
-            )
-            sum_distance_to_obstcales += dis
-            if dis < distance_to_nearest_obstcale:
-                distance_to_nearest_obstcale = dis
-
-        distance_to_pit = self.packmanz.board.man_distance(
-            self.pos_agent[0],
-            self.pos_agent[1],
-            self.packmanz.board.pit[0],
-            self.packmanz.board.pit[1],
-        )
-
-        distance_to_exit_port = self.packmanz.board.BFS_distance(
-            self.pos_agent[0],
-            self.pos_agent[1],
-            self.packmanz.board.exit_port[0],
-            self.packmanz.board.exit_port[1],
-        )
-
-        distance_to_vaccine = self.packmanz.board.BFS_distance(
-            self.pos_agent[0],
-            self.pos_agent[1],
-            self.packmanz.board.vaccine[0],
-            self.packmanz.board.vaccine[1],
-        )
-
-        possible_move = self.possible_agent_move()
-
-        can_shot = False
-        D_shot = [(-2, 0), (2, 0), (0, -2), (0, 2)]
-        for i in range(4):
-            if (
-                self.pos_agent[0] + D_shot[i][0] > 0
-                and self.pos_agent[0] + D_shot[i][0]
-                <= self.packmanz.board.height
-                and self.pos_agent[1] + D_shot[i][1] > 0
-                and self.pos_agent[1] + D_shot[i][1]
-                <= self.packmanz.board.width
-                and self.packmanz.board.board[
-                    self.pos_agent[0] + D_shot[i][0],
-                    self.pos_agent[1] + D_shot[i][1],
-                ]
-                == "Z"
-            ):
-                can_shot = True
-
-        state_value = (
-            distance_to_nearest_zombie
-            * self.feature_agent[0]
-            * (self.packmanz.board.has_vaccine * -1)
-            + distance_to_pit * self.feature_agent[1]
-            + distance_to_nearest_obstcale * self.feature_agent[2]
-            + distance_to_exit_port
-            * self.feature_agent[3]
-            * (self.packmanz.n_zombie == 0)
-            + distance_to_vaccine
-            * self.feature_agent[4]
-            * (self.packmanz.board.has_vaccine == 0)
-            * (self.packmanz.board.has_vaccine == 0)
-            + self.n_shot * self.feature_agent[5]
-            + self.packmanz.n_zombie * self.feature_agent[6]
-            + sum_distance_to_zombies
-            * self.feature_agent[7]
-            * (self.packmanz.board.has_vaccine * -1)
-            + sum_distance_to_obstcales * self.feature_agent[8]
-            + self.packmanz.board.has_vaccine * self.feature_agent[9]
-            + len(possible_move) * self.feature_agent[10]
-            + can_shot * self.feature_agent[11]
-        )
-
-        return state_value
-
-    def choose_agent_action(self) -> tuple:
-        possible_move = self.possible_agent_move()
-        if len(possible_move) == 0:
-            return [0, 0]
-
-        max_state_value = -np.inf
-        max_move = [0, 0]
-        for move in possible_move:
-            ch = self.packmanz.board.board[
-                self.pos_agent[0] + move[0], self.pos_agent[1] + move[1]
-            ]
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = "B"
-            self.pos_agent[0] += move[0]
-            self.pos_agent[1] += move[1]
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = "A"
-            state_value = self.agent_state_value()
-
-            if state_value > max_state_value:
-                max_state_value = state_value
-                max_move = move
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = ch
-            self.pos_agent[0] -= move[0]
-            self.pos_agent[1] -= move[1]
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = "A"
-
-        return max_move, max_state_value
-
-    def move_agent(self) -> float:
-        move_agent, state_value_agent = self.choose_agent_action()
-        if (
-            (type(move_agent) == np.ndarray and (move_agent == [0, 0]).all())
-            or (type(move_agent) == int)
-            or self.iteration > self.max_iteration
-        ):
-            print("Agent can't move")
-            exit()  # Update weight
-        # self.pre_pos_agent = self.pos_agent.copy()
-
-        self.iteration += 1
-
-        # update label pos agent before moving agent
-        if (self.pos_agent == self.packmanz.board.exit_port).all():
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = "E"
-        else:
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = "B"
-
-        # move agent
-        self.pos_agent[0] += move_agent[0]
-        self.pos_agent[1] += move_agent[1]
-
-        # Update status after moving agent
-        if (
-            self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]]
-            == "V"
-        ):
-            self.packmanz.board.has_vaccine = True
-            self.packmanz.board.generate_vaccine()
-        elif (
-            self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]]
-            == "Z"
-            and self.packmanz.board.has_vaccine
-        ):
-            self.packmanz.board.has_vaccine = False
-            # Delete zombie
-            for i in range(self.packmanz.n_zombie):
+            for d in self.pacmanz.D:
                 if (
-                    self.packmanz.zombie[i].pos_zombie == self.pos_agent
+                    self.pacmanz.board.board[x + d[0], y + d[1]]
+                    == self.pacmanz.board.s_zombie
+                ):
+                    return False
+        # It's not margin or obstacle
+        # Agent don't have vaccine
+        # There is no zombie around
+        return True
+
+    def get_distance(self, x, y, is_zombie):
+        """
+        Distance agent to x, y using BFS
+        """
+        # Create queue
+        queue = []
+        queue.append([self.position_agent[0], self.position_agent[1], 0])
+        # Create visited as set
+        visited = set()
+        visited.add((self.position_agent[0], self.position_agent[1]))
+        while len(queue) > 0:
+            # Pop from queue
+            x1, y1, dis = queue.pop(0)
+            # Check if it's the target
+            if x1 == x and y1 == y:
+                return dis
+            # Add children to queue
+            for dir in self.pacmanz.D:
+                if (
+                    x1 + dir[0],
+                    y1 + dir[1],
+                ) not in visited and self.can_agent_go(
+                    x1 + dir[0],
+                    y1 + dir[1],
+                    is_zombie or self.pacmanz.agent_has_vaccine,
+                ):
+                    queue.append([x1 + dir[0], y1 + dir[1], dis + 1])
+                    visited.add((x1 + dir[0], y1 + dir[1]))
+                # Check if it's the target
+                if x1 + dir[0] == x and y1 + dir[1] == y:
+                    return dis + 1
+        # no path
+        return self.pacmanz.Qotr
+
+    def can_agent_shoot(self):
+        """
+        check if agent can shoot
+        """
+        if self.pacmanz.shot_left <= 0:
+            return False
+        for i in range(self.pacmanz.zombie_left):
+            for dir in self.pacmanz.D:
+                if (
+                    (
+                        self.pacmanz.zombie[i].position_zombie[0] + 2 * dir[0],
+                        self.pacmanz.zombie[i].position_zombie[1] + 2 * dir[1],
+                    )
+                    == self.position_agent
                 ).all():
-                    self.packmanz.zombie[i] = self.packmanz.zombie[-1]
-                    self.packmanz.zombie.pop()
-                    self.packmanz.n_zombie -= 1
-                    # Check if no zombie left and update feature to go exit port
-                    if self.packmanz.n_zombie == 0:
-                        self.feature_agent[3] = -100000  # Go to exit port
-                    break
+                    return True
+        return False
 
-        # Check if all zombies are killed and agent is in exit port
+    def state_value(self):
+        """
+        return value of state based on weights and theire values
+        """
+
+        distance_to_nearest_zombie = self.pacmanz.Qotr
+        sum_distance_to_all_zombie = 0
+        zombies_in_distance_2 = 0
+        for i in range(self.pacmanz.zombie_left):
+            distance_to_zombie = self.get_distance(
+                self.pacmanz.zombie[i].position_zombie[0],
+                self.pacmanz.zombie[i].position_zombie[1],
+                True,
+            )
+            if distance_to_zombie <= 2:
+                zombies_in_distance_2 += 1
+            if distance_to_zombie < distance_to_nearest_zombie:
+                distance_to_nearest_zombie = distance_to_zombie
+            sum_distance_to_all_zombie += distance_to_zombie
+
+        distance_to_nearest_obstacle = np.inf
+        sum_distance_to_all_obstacle = 0
+
+        for i in range(self.pacmanz.board.n_obstcale):
+            distance_to_obstacle = self.get_distance(
+                self.pacmanz.board.position_obstacle[i][0],
+                self.pacmanz.board.position_obstacle[i][1],
+                self.pacmanz.agent_has_vaccine,
+            )
+            if distance_to_obstacle < distance_to_nearest_obstacle:
+                distance_to_nearest_obstacle = distance_to_obstacle
+            sum_distance_to_all_obstacle += distance_to_obstacle
+
+        distance_to_exit_port = self.get_distance(
+            self.pacmanz.board.position_exit_port[0],
+            self.pacmanz.board.position_exit_port[1],
+            self.pacmanz.agent_has_vaccine,
+        )
+
+        distance_to_pit = self.get_distance(
+            self.pacmanz.board.position_pit[0],
+            self.pacmanz.board.position_pit[1],
+            self.pacmanz.agent_has_vaccine,
+        )
+
+        can_agent_shoot = self.can_agent_shoot()
+
+        distance_to_vaccine = self.get_distance(
+            self.pacmanz.board.position_vaccine[0],
+            self.pacmanz.board.position_vaccine[1],
+            self.pacmanz.agent_has_vaccine,
+        )
+
+        values = np.array(
+            [
+                # 00. Distance to the nearest zombie with vaccine
+                distance_to_nearest_zombie
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 01. Distance to the nearest zombie without vaccine
+                distance_to_nearest_zombie
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 02. Sum of distance to all zombies with vaccine
+                sum_distance_to_all_zombie
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 03. Sum of distance to all zombies without vaccine
+                sum_distance_to_all_zombie
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 04. Distance to the nearest obstcale with vaccine
+                distance_to_nearest_obstacle
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 05. Distance to the nearest obstcale without vaccine
+                distance_to_nearest_obstacle
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 06. sum of distance to all obstcales with vaccine
+                sum_distance_to_all_obstacle
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 07. sum of distance to all obstcales without vaccine
+                sum_distance_to_all_obstacle
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 08. Distance to the exit port with vaccine
+                distance_to_exit_port if self.pacmanz.agent_has_vaccine else 0,
+                # 09. Distance to the exit port without vaccine
+                distance_to_exit_port
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 10. Distance to the pit with vaccine
+                distance_to_pit if self.pacmanz.agent_has_vaccine else 0,
+                # 11. Distance to the pit without vaccine
+                distance_to_pit if not self.pacmanz.agent_has_vaccine else 0,
+                # 12. number of shot left with vaccine
+                self.pacmanz.shot_left
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 13. number of shot left without vaccine
+                self.pacmanz.shot_left
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 14. number of zombies in distance 2 with vaccine
+                zombies_in_distance_2 if self.pacmanz.agent_has_vaccine else 0,
+                # 15. number of zombies in distance 2 without vaccine
+                zombies_in_distance_2
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 16. agent has vaccine
+                1 if self.pacmanz.agent_has_vaccine else 0,
+                # 17. agent has not vaccine
+                1 if not self.pacmanz.agent_has_vaccine else 0,
+                # 18. number of zombies left
+                self.pacmanz.zombie_left,
+                # 19. number of shots left
+                self.pacmanz.shot_left,
+                # 20. can agent shoot with vaccine
+                1 if can_agent_shoot and self.pacmanz.agent_has_vaccine else 0,
+                # 21. can agent shoot without vaccine
+                1
+                if can_agent_shoot and not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 22. distance to vaccine with vaccine
+                distance_to_vaccine if self.pacmanz.agent_has_vaccine else 0,
+                # 23. distance to vaccine without vaccine
+                distance_to_vaccine
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 24. Distance to exit port when no zombie left
+                distance_to_exit_port
+                if self.pacmanz.zombie_left == 0
+                else 0,
+            ]
+        )
+
+        return (
+            np.sum(
+                self.pacmanz.agent_weights
+                * values
+                / self.pacmanz.agent_value_normalizer
+            ),
+            values / self.pacmanz.agent_value_normalizer,
+        )
+
+    def possible_moves(self):
+        """
+        return possible moves of agent
+        """
+        possible_moves = []
+        for dir in self.pacmanz.D:
+            if self.can_agent_go(
+                self.position_agent[0] + dir[0],
+                self.position_agent[1] + dir[1],
+                self.pacmanz.agent_has_vaccine,
+            ):
+                possible_moves.append(dir)
+
+        return np.array(possible_moves)
+
+    def update_weights_and_reset(self, is_win):
+        """
+        update weights
+        """
+        state_value, values = self.state_value()
+        if is_win:
+            self.pacmanz.agent_weights += (
+                self.pacmanz.learning_rate
+                * (self.pacmanz.win_reward - state_value)
+                * values
+            )
+        else:
+            self.pacmanz.agent_weights += (
+                self.pacmanz.learning_rate
+                * (self.pacmanz.lose_reward - state_value)
+                * values
+            )
+
+        # reset game
+        self.pacmanz.reset()
+
+    def choose_action(self):
+        """
+        choose action based on state value of possible actions
+        """
+        possible_moves = self.possible_moves()
+        if len(possible_moves) == 0:
+            return None, None
+
+        best_action = None
+        best_state_value = -np.inf
+
+        for move in possible_moves:
+            # Do move
+            self.position_agent[0] += move[0]
+            self.position_agent[1] += move[1]
+            s_cell = self.pacmanz.board.board[
+                self.position_agent[0], self.position_agent[1]
+            ]
+            self.pacmanz.board.board[
+                self.position_agent[0], self.position_agent[1]
+            ] = self.pacmanz.board.s_agent
+
+            # Get state value
+            state_value, _ = self.state_value()
+
+            if state_value > best_state_value:
+                best_state_value = state_value
+                best_action = move
+
+            # Back to original state
+            self.pacmanz.board.board[
+                self.position_agent[0], self.position_agent[1]
+            ] = s_cell
+            self.position_agent[0] -= move[0]
+            self.position_agent[1] -= move[1]
+
+        return best_action, best_state_value
+
+    def move(self):
+        """
+        move agent
+        """
+
+        # Check if current agent position is exit port
         if (
-            self.packmanz.n_zombie == 0
-            and (self.pos_agent == self.packmanz.board.exit_port).all()
+            self.pacmanz.board.position_exit_port == self.position_agent
+        ).all():
+            # change current cell to exit port
+            self.pacmanz.board.board[
+                self.position_agent[0], self.position_agent[1]
+            ] = self.pacmanz.board.s_exit_port
+            # Update pygame
+            self.pacmanz.board.create_rect(
+                self.pacmanz.board.c_exit_port,
+                self.position_agent[0],
+                self.position_agent[1],
+            )
+        else:
+            self.pacmanz.board.board[
+                self.position_agent[0], self.position_agent[1]
+            ] = self.pacmanz.board.s_empty
+            self.pacmanz.board.create_rect(
+                self.pacmanz.board.c_empty,
+                self.position_agent[0],
+                self.position_agent[1],
+            )
+
+        # Choose action
+        best_action, best_state_value = self.choose_action()
+
+        if best_state_value == None:
+            # Update weights and reset game
+            self.update_weights_and_reset(is_win=False)
+            return self.state_value()
+
+        # Do move
+        self.position_agent[0] += best_action[0]
+        self.position_agent[1] += best_action[1]
+        # type of cell that agent is moving to
+        s_cell = self.pacmanz.board.board[
+            self.position_agent[0], self.position_agent[1]
+        ]
+        # change current cell to agent
+        self.pacmanz.board.board[
+            self.position_agent[0], self.position_agent[1]
+        ] = self.pacmanz.board.s_agent
+        # Update pygame
+        self.pacmanz.board.create_rect(
+            self.pacmanz.board.c_agent,
+            self.position_agent[0],
+            self.position_agent[1],
+        )
+
+        # Check if cell is vaccine
+        if s_cell == self.pacmanz.board.s_vaccine:
+            self.pacmanz.agent_has_vaccine = True
+            # Generate new vaccine
+            self.pacmanz.board.generate_vaccine()
+            # Update pygame
+            self.pacmanz.board.create_rect(
+                self.pacmanz.board.c_vaccine,
+                self.pacmanz.board.position_vaccine[0],
+                self.pacmanz.board.position_vaccine[1],
+            )
+        # Check if cell is pit
+        elif s_cell == self.pacmanz.board.s_pit:
+            # Update weights and reset game
+            self.update_weights_and_reset(is_win=False)
+        # Check if cell is zombie
+        elif s_cell == self.pacmanz.board.s_zombie:
+            # vaccinate zombie
+            self.pacmanz.vaccinate_zombie(self.position_agent)
+        # Check if cell is exit port and all zombies gone = win
+        elif (
+            s_cell == self.pacmanz.board.s_exit_port
+            and self.pacmanz.zombie_left == 0
         ):
-            self.packmanz.board.board[
-                self.pos_agent[0], self.pos_agent[1]
-            ] = "A"
-            print("Bar Table Shadane Bekooob =)")
-            exit()  # Update weight
+            # Update weights and reset game
+            self.update_weights_and_reset(is_win=True)
 
-        self.packmanz.board.board[self.pos_agent[0], self.pos_agent[1]] = "A"
-
-        return state_value_agent
+        return best_state_value
