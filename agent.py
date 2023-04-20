@@ -232,13 +232,13 @@ class agent:
             ]
         )
 
+        # Add sqrt to all values after normalizing [0, 1] to emphasize the on near distances(around 0)
         return (
             np.sum(
                 self.pacmanz.agent_weights
-                * values
-                / self.pacmanz.agent_value_normalizer
+                * (values / self.pacmanz.agent_value_normalizer) ** 0.25
             ),
-            values / self.pacmanz.agent_value_normalizer,
+            (values / self.pacmanz.agent_value_normalizer) ** 0.25,
         )
 
     def possible_moves(self):
@@ -390,6 +390,17 @@ class agent:
                 self.pacmanz.board.s_exit_port,
                 self.pacmanz.board.c_exit_port,
             )
+        # Check if current agent position was vaccine
+        elif (
+            self.pacmanz.board.position_vaccine == self.position_agent
+        ).all():
+            # Update current cell to vaccine
+            self.pacmanz.board.update_cell(
+                self.position_agent[0],
+                self.position_agent[1],
+                self.pacmanz.board.s_vaccine,
+                self.pacmanz.board.c_vaccine,
+            )
         else:
             # Update current cell to empty
             self.pacmanz.board.update_cell(
@@ -422,15 +433,17 @@ class agent:
 
         # Check if cell was vaccine
         if s_cell == self.pacmanz.board.s_vaccine:
-            self.pacmanz.agent_has_vaccine = True
-            # Generate new vaccine
-            self.pacmanz.board.generate_vaccine()
-            # Update pygame
-            self.pacmanz.board.create_rect(
-                self.pacmanz.board.c_vaccine,
-                self.pacmanz.board.position_vaccine[0],
-                self.pacmanz.board.position_vaccine[1],
-            )
+            # Check if agent hasn't vaccine
+            if not self.pacmanz.agent_has_vaccine:
+                self.pacmanz.agent_has_vaccine = True
+                # Generate new vaccine
+                self.pacmanz.board.generate_vaccine()
+                # Update pygame
+                self.pacmanz.board.create_rect(
+                    self.pacmanz.board.c_vaccine,
+                    self.pacmanz.board.position_vaccine[0],
+                    self.pacmanz.board.position_vaccine[1],
+                )
 
         # Check if cell was pit
         elif s_cell == self.pacmanz.board.s_pit:
