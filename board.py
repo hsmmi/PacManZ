@@ -7,6 +7,7 @@ import pygame
 
 class board:
     def __init__(self, board_height, board_width, n_obstcale) -> None:
+        self.show_time = True
         # Store initial values
         self.board_height = board_height
         self.board_width = board_width
@@ -50,8 +51,6 @@ class board:
 
         # Create board
         self.create_board()
-        self.init_pygame()
-        self.update_whole_board()
         pass
 
     def is_cell_empty(self, x: int, y: int) -> bool:
@@ -71,8 +70,9 @@ class board:
 
     def generate_vaccine(self):
         x, y = self.find_empty_cell()
-        self.board[x, y] = self.s_vaccine
         self.position_vaccine = np.array([x, y])
+        self.update_cell(x, y, self.s_vaccine, self.c_vaccine)
+
         pass
 
     def create_board(self):
@@ -80,6 +80,11 @@ class board:
         self.board = np.full(
             (self.board_height + 2, self.board_width + 2), self.s_empty
         )
+
+        # Check if it needs to initialize pygame
+        if self.show_time:
+            self.init_pygame()
+            self.update_whole_board()
 
         # Create margin
         self.board[0, :] = self.s_margin
@@ -111,24 +116,27 @@ class board:
     def update_cell(self, x, y, symbol, color):
         # Update cell
         self.board[x, y] = symbol
+        
         self.create_rect(color, x, y)
         pass
-    
+
     def create_rect(self, color, x, y):
+        if not self.show_time:
+            return
         pygame.draw.rect(
             self.screen,
             color,
             (
-                y * self.zoom + self.line_width,
-                x * self.zoom + self.line_width,
-                self.zoom - 2 * +self.line_width,
-                self.zoom - 2 * self.line_width,
+                y * self.zoom + self.line_width,  # x
+                x * self.zoom + self.line_width,  # y
+                self.zoom - 2 * self.line_width,  # a
+                self.zoom - 2 * self.line_width,  # b
             ),
         )
         # Update screen
         pygame.display.update()
         pass
-    
+
     def init_pygame(self):
         # Initialize pygame
         pygame.init()
@@ -173,3 +181,42 @@ class board:
                     i,
                     j,
                 )
+
+    def update_cell_before_move(self, x, y):
+        # Check if current cell position was exit port
+        if (self.position_exit_port == (x, y)).all():
+            # Update current cell to exit port
+            self.update_cell(
+                x,
+                y,
+                self.s_exit_port,
+                self.c_exit_port,
+            )
+        # Check if current agent position was vaccine
+        elif (self.position_vaccine == (x, y)).all():
+            # Update current cell to vaccine
+            self.update_cell(
+                x,
+                y,
+                self.s_vaccine,
+                self.c_vaccine,
+            )
+        # Check if current agent position was pit
+        elif (self.position_pit == (x, y)).all():
+            # Update current cell to pit
+            self.update_cell(
+                x,
+                y,
+                self.s_pit,
+                self.c_pit,
+            )
+        else:
+            # Update current cell to empty
+            self.update_cell(
+                x,
+                y,
+                self.s_empty,
+                self.c_empty,
+            )
+
+        pass

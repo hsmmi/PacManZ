@@ -221,6 +221,7 @@ class zombie:
                 * (self.pacmanz.zombie_win_reward - pre_state_value)
                 * pre_values
             )
+            print("Zombie Killed Agent")
             # Reset game
             self.pacmanz.reset()
 
@@ -231,7 +232,6 @@ class zombie:
                 * (self.pacmanz.zombie_lose_reward - pre_state_value)
                 * pre_values
             )
-
         return
 
     def choose_action(self) -> list[int, int]:
@@ -284,38 +284,11 @@ class zombie:
         # Choose action (find the best move)
         best_action, best_state_value = self.choose_action()
 
-        # Check if current zombie position was exit port
-        if (
-            self.pacmanz.board.position_exit_port == self.position_zombie
-        ).all():
-            # change current cell to exit port
-            self.pacmanz.board.update_cell(
-                self.position_zombie[0],
-                self.position_zombie[1],
-                self.pacmanz.board.s_exit_port,
-                self.pacmanz.board.c_exit_port,
-            )
+        # Update current cell to pre state
+        self.pacmanz.board.update_cell_before_move(
+            self.position_zombie[0], self.position_zombie[1]
+        )
 
-        # Check if current zombie position was vaccine
-        elif (
-            self.pacmanz.board.position_vaccine == self.position_zombie
-        ).all():
-            # change current cell to vaccine
-            self.pacmanz.board.update_cell(
-                self.position_zombie[0],
-                self.position_zombie[1],
-                self.pacmanz.board.s_vaccine,
-                self.pacmanz.board.c_vaccine,
-            )
-
-        else:
-            # change current cell to empty
-            self.pacmanz.board.update_cell(
-                self.position_zombie[0],
-                self.position_zombie[1],
-                self.pacmanz.board.s_empty,
-                self.pacmanz.board.c_empty,
-            )
 
         # Check if there is no move for zombie
         if best_state_value is None:

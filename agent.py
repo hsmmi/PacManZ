@@ -8,7 +8,9 @@ class agent:
         self.pacmanz.board.board[
             self.position_agent[0], self.position_agent[1]
         ] = self.pacmanz.board.s_agent
-        self.zombies_in_distance_2 = 0
+        self.zombies_in_close_range = 0
+        self.close_range = 4
+        self.mid_range = 8
         pass
 
     def reset(self):
@@ -43,7 +45,7 @@ class agent:
         # There is no zombie around
         return True
 
-    def get_distance(self, x, y, is_zombie):
+    def get_distance(self, x, y, max_dis):
         """
         Distance agent to x, y using BFS
         """
@@ -60,6 +62,10 @@ class agent:
             # Pop from queue
             x1, y1, dis = queue.pop(0)
 
+            # If distance is bigger than max_dis then return 0
+            if dis > max_dis:
+                return 0
+
             # Add children to queue
             for dir in self.pacmanz.dir_4:
                 # Check if it is the target
@@ -72,7 +78,6 @@ class agent:
                 ) not in visited and self.can_agent_go(
                     x1 + dir[0],
                     y1 + dir[1],
-                    # is_zombie or self.pacmanz.agent_has_vaccine,
                 ):
                     queue.append([x1 + dir[0], y1 + dir[1], dis + 1])
                     visited.add((x1 + dir[0], y1 + dir[1]))
@@ -80,7 +85,13 @@ class agent:
         # no path
         return self.pacmanz.Qotr
 
-    def can_agent_shoot(self) -> list[bool, list]:
+    def euclidean_distance(self, x, y):
+        return np.sqrt(
+            (x - self.position_agent[0]) ** 2
+            + (y - self.position_agent[1]) ** 2
+        )
+
+    def can_agent_shoot(self) -> list[int, list]:
         """
         check if agent can shoot and return which zombie
         """
@@ -91,15 +102,15 @@ class agent:
             for dir in self.pacmanz.dir_4x2:
                 if (
                     (
-                        self.pacmanz.zombie[i].position_zombie[0] + dir[0],
-                        self.pacmanz.zombie[i].position_zombie[1] + dir[1],
+                        self.pacmanz.zombie[i].position_zombie[0] - dir[0],
+                        self.pacmanz.zombie[i].position_zombie[1] - dir[1],
                     )
                     == self.position_agent
                 ).all():
                     zombie_in_range.append(i)
 
         if len(zombie_in_range) > 0:
-            return True, zombie_in_range
+            return len(zombie_in_range), zombie_in_range
         else:
             return False, []
 
@@ -108,40 +119,62 @@ class agent:
         return value of state based on weights and theire values
         """
 
-        distance_to_nearest_zombie = self.pacmanz.Qotr
-        sum_distance_to_all_zombie = 0
-        zombies_in_distance_2 = 0
+        distance_to_nearest_zombie_in_mid_range = self.pacmanz.Qotr
+        distance_to_nearest_zombie_in_close_range = 0
+        sum_distance_to_all_zombie_in_mid_range = 0
+        zombies_in_close_range = 0
+        euclidean_distance_to_nearest_zombie = self.pacmanz.Qotr
         for i in range(self.pacmanz.zombie_left):
             distance_to_zombie = self.get_distance(
                 self.pacmanz.zombie[i].position_zombie[0],
                 self.pacmanz.zombie[i].position_zombie[1],
-                True,
+                self.mid_range
+                if not self.pacmanz.agent_has_vaccine
+                else self.pacmanz.Qotr,
             )
-            if distance_to_zombie <= 2:
-                zombies_in_distance_2 += 1
-            if distance_to_zombie < distance_to_nearest_zombie:
-                distance_to_nearest_zombie = distance_to_zombie
-            sum_distance_to_all_zombie += distance_to_zombie
-        self.zombies_in_distance_2 = zombies_in_distance_2
+            if distance_to_zombie <= self.close_range:
+                zombies_in_close_range += 1
+            if distance_to_zombie < distance_to_nearest_zombie_in_mid_range:
+                if distance_to_zombie <= self.close_range:
+                    distance_to_nearest_zombie_in_close_range = (
+                        distance_to_zombie
+                    )
+                distance_to_nearest_zombie_in_mid_range = distance_to_zombie
+                euclidean_distance_to_nearest_zombie = self.euclidean_distance(
+                    self.pacmanz.zombie[i].position_zombie[0],
+                    self.pacmanz.zombie[i].position_zombie[1],
+                )
+            sum_distance_to_all_zombie_in_mid_range += distance_to_zombie
 
-        distance_to_pit = self.get_distance(
+        self.zombies_in_close_range = zombies_in_close_range
+
+        distance_to_pit_in_mid_range = self.get_distance(
             self.pacmanz.board.position_pit[0],
             self.pacmanz.board.position_pit[1],
-            self.pacmanz.agent_has_vaccine,
+            self.mid_range,
         )
 
-        distance_to_nearest_obstacle = np.inf
-        sum_distance_to_all_obstacle_pit = distance_to_pit
+        distance_to_nearest_obstacle_in_mid_range = np.inf
+        sum_distance_to_all_obstacle_pit_in_mid_range = (
+            distance_to_pit_in_mid_range
+        )
 
         for i in range(self.pacmanz.board.n_obstcale):
             distance_to_obstacle = self.get_distance(
                 self.pacmanz.board.position_obstacle[i][0],
                 self.pacmanz.board.position_obstacle[i][1],
-                self.pacmanz.agent_has_vaccine,
+                self.mid_range,
             )
-            if distance_to_obstacle < distance_to_nearest_obstacle:
-                distance_to_nearest_obstacle = distance_to_obstacle
-            sum_distance_to_all_obstacle_pit += distance_to_obstacle
+            if (
+                distance_to_obstacle
+                < distance_to_nearest_obstacle_in_mid_range
+            ):
+                distance_to_nearest_obstacle_in_mid_range = (
+                    distance_to_obstacle
+                )
+            sum_distance_to_all_obstacle_pit_in_mid_range += (
+                distance_to_obstacle
+            )
 
         distance_to_exit_port = self.get_distance(
             self.pacmanz.board.position_exit_port[0],
@@ -154,90 +187,98 @@ class agent:
         distance_to_vaccine = self.get_distance(
             self.pacmanz.board.position_vaccine[0],
             self.pacmanz.board.position_vaccine[1],
-            self.pacmanz.agent_has_vaccine,
+            self.pacmanz.Qotr,
         )
 
         number_of_possible_move = len(self.possible_moves())
 
         values = np.array(
             [
-                # 00. Distance to the nearest zombie with vaccine
-                distance_to_nearest_zombie
+                # 00. Distance to the nearest zombie in mid range with vaccine
+                distance_to_nearest_zombie_in_mid_range
                 if self.pacmanz.agent_has_vaccine
                 else 0,
-                # 01. Distance to the nearest zombie without vaccine
-                distance_to_nearest_zombie
+                # 01. Distance to the nearest zombie in mid range without vaccine
+                distance_to_nearest_zombie_in_mid_range
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 02. Sum of distance to all zombies with vaccine
-                sum_distance_to_all_zombie
+                # 02. Sum of distance to all zombies in mid range with vaccine
+                sum_distance_to_all_zombie_in_mid_range
                 if self.pacmanz.agent_has_vaccine
                 else 0,
-                # 03. Sum of distance to all zombies without vaccine
-                sum_distance_to_all_zombie
+                # 03. Sum of distance to all zombies in mid range without vaccine
+                sum_distance_to_all_zombie_in_mid_range
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 04. Distance to the nearest obstcale with vaccine
-                distance_to_nearest_obstacle
+                # 04. Distance to the nearest obstcale in mid range without vaccine
+                distance_to_nearest_obstacle_in_mid_range
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 05. sum of distance to all obstcales in mid range without vaccine
+                sum_distance_to_all_obstacle_pit_in_mid_range
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 06. Distance to the pit in mid range with vaccine
+                distance_to_pit_in_mid_range
                 if self.pacmanz.agent_has_vaccine
                 else 0,
-                # 05. Distance to the nearest obstcale without vaccine
-                distance_to_nearest_obstacle
+                # 07. Distance to the pit in mid range without vaccine
+                distance_to_pit_in_mid_range
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 06. sum of distance to all obstcales with vaccine
-                sum_distance_to_all_obstacle_pit
-                if self.pacmanz.agent_has_vaccine
-                else 0,
-                # 07. sum of distance to all obstcales without vaccine
-                sum_distance_to_all_obstacle_pit
-                if not self.pacmanz.agent_has_vaccine
-                else 0,
-                # 08. Distance to the exit port with vaccine
-                distance_to_exit_port if self.pacmanz.agent_has_vaccine else 0,
-                # 09. Distance to the exit port without vaccine
-                distance_to_exit_port
-                if not self.pacmanz.agent_has_vaccine
-                else 0,
-                # 10. Distance to the pit with vaccine
-                distance_to_pit if self.pacmanz.agent_has_vaccine else 0,
-                # 11. Distance to the pit without vaccine
-                distance_to_pit if not self.pacmanz.agent_has_vaccine else 0,
-                # 12. number of shot left with vaccine
+                # 08. number of shot left with vaccine
                 self.pacmanz.shot_left
                 if self.pacmanz.agent_has_vaccine
                 else 0,
-                # 13. number of shot left without vaccine
+                # 09. number of shot left without vaccine
                 self.pacmanz.shot_left
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 14. number of zombies in distance 2 with vaccine
-                zombies_in_distance_2 if self.pacmanz.agent_has_vaccine else 0,
-                # 15. number of zombies in distance 2 without vaccine
-                zombies_in_distance_2
+                # 10. number of zombies in close range with vaccine
+                zombies_in_close_range
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 11. number of zombies in close range without vaccine
+                zombies_in_close_range
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 16. number of shots left
+                # 12. number of shots left
                 self.pacmanz.shot_left,
-                # 17. can agent shoot with vaccine
+                # 13. can agent shoot with vaccine
                 1 if can_agent_shoot and self.pacmanz.agent_has_vaccine else 0,
-                # 18. can agent shoot without vaccine
+                # 14. can agent shoot without vaccine
                 1
                 if can_agent_shoot and not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 19. distance to vaccine without vaccine
+                # 15. distance to vaccine without vaccine
                 distance_to_vaccine
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 20. Distance to exit port when no zombie left
+                # 16. Distance to exit port when no zombie left
                 distance_to_exit_port if self.pacmanz.zombie_left == 0 else 0,
-                # 21. Number of possible moves with vaccine
+                # 17. Number of possible moves with vaccine
                 number_of_possible_move
                 if not self.pacmanz.agent_has_vaccine
                 else 0,
-                # 22. Number of possible moves without vaccine
+                # 18. Number of possible moves without vaccine
                 number_of_possible_move
                 if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 19. Euclidean distance to the nearest zombie with vaccine
+                euclidean_distance_to_nearest_zombie
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 20. Euclidean distance to the nearest zombie without vaccine
+                euclidean_distance_to_nearest_zombie
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 21. Distance to the nearest zombie in close range with vaccine
+                distance_to_nearest_zombie_in_close_range
+                if self.pacmanz.agent_has_vaccine
+                else 0,
+                # 22. Distance to the nearest zombie in close range without vaccine
+                distance_to_nearest_zombie_in_close_range
+                if not self.pacmanz.agent_has_vaccine
                 else 0,
             ]
         )
@@ -277,13 +318,14 @@ class agent:
                 * (self.pacmanz.agent_win_reward - state_value)
                 * values
             )
+            print("Agent Win")
         else:
             self.pacmanz.agent_weights += (
                 self.pacmanz.learning_rate
                 * (self.pacmanz.agent_lose_reward - state_value)
                 * values
             )
-
+            print("Agent Lose")
         # reset game
         self.pacmanz.reset()
 
@@ -382,43 +424,35 @@ class agent:
 
         return False
 
+    def check_for_shooting(self):
+        # Check if agent must shoot zombie
+        # If there is more than one zombie in distance 2
+        # we must shoot otherwise we can run away
+        if self.zombies_in_close_range > 1 and self.pacmanz.shot_left > 0:
+            # Check if agent can shoot
+            can_shoot, zombie_in_range = self.can_agent_shoot()
+            if can_shoot:
+                # Shoot all zombies in range except last one if agent has vaccine
+                for i in range(
+                    len(zombie_in_range) - 1,
+                    self.pacmanz.agent_has_vaccine - 1,
+                    -1,
+                ):
+                    # Shoot zombie
+                    self.shoot(zombie_in_range[i])
+
     def move(self):
         """
         move agent
         """
+        self.check_for_shooting()
         # Choose action
         best_action, best_state_value = self.choose_action()
 
-        # Check if current agent position was exit port
-        if (
-            self.pacmanz.board.position_exit_port == self.position_agent
-        ).all():
-            # Update current cell to exit port
-            self.pacmanz.board.update_cell(
-                self.position_agent[0],
-                self.position_agent[1],
-                self.pacmanz.board.s_exit_port,
-                self.pacmanz.board.c_exit_port,
-            )
-        # Check if current agent position was vaccine
-        elif (
-            self.pacmanz.board.position_vaccine == self.position_agent
-        ).all():
-            # Update current cell to vaccine
-            self.pacmanz.board.update_cell(
-                self.position_agent[0],
-                self.position_agent[1],
-                self.pacmanz.board.s_vaccine,
-                self.pacmanz.board.c_vaccine,
-            )
-        else:
-            # Update current cell to empty
-            self.pacmanz.board.update_cell(
-                self.position_agent[0],
-                self.position_agent[1],
-                self.pacmanz.board.s_empty,
-                self.pacmanz.board.c_empty,
-            )
+        # Update current cell to pre state
+        self.pacmanz.board.update_cell_before_move(
+            self.position_agent[0], self.position_agent[1]
+        )
 
         if best_state_value == None:
             # There is no move so agent lost
@@ -448,12 +482,6 @@ class agent:
                 self.pacmanz.agent_has_vaccine = True
                 # Generate new vaccine
                 self.pacmanz.board.generate_vaccine()
-                # Update pygame
-                self.pacmanz.board.create_rect(
-                    self.pacmanz.board.c_vaccine,
-                    self.pacmanz.board.position_vaccine[0],
-                    self.pacmanz.board.position_vaccine[1],
-                )
 
         # Check if cell was pit
         elif s_cell == self.pacmanz.board.s_pit:
@@ -467,17 +495,7 @@ class agent:
             # Update weights and reset game
             self.update_weights_and_reset(is_win=True)
 
-        # Check if agent must shoot zombie
-        # If there is more than one zombie in distance 2
-        # we must shoot otherwise we can run away
-        if self.zombies_in_distance_2 > 1 and self.pacmanz.shot_left > 0:
-            # Check if agent can shoot
-            can_shoot, zombie_in_range = self.can_agent_shoot()
-            if can_shoot:
-                # Shoot all zombies in range except last one
-                for i in range(len(zombie_in_range) - 1):
-                    # Shoot zombie
-                    self.shoot(i)
+        self.check_for_shooting()
 
         # Check if can vaccinate zombie
         self.vaccinate_zombie()

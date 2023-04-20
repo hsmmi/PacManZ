@@ -39,9 +39,9 @@ class pacmanz:
         self.vaccinate_score = 100
         self.learning_rate = 1e-2
         self.n_iteration = 0
-        self.max_iteration = board_height * board_width * 2
+        self.max_iteration = board_height * board_width / 2
         self.n_game = 0
-
+        self.delay = 200
         self.board = board(board_height, board_width, n_obstcale)
         self.agent = agent(self)
         self.zombie = []
@@ -58,99 +58,114 @@ class pacmanz:
 
     def create_agent_feature(self):
         """
-        00. Distance to the nearest zombie with vaccine
-        01. Distance to the nearest zombie without vaccine
-        02. Sum of distance to all zombies with vaccine
-        03. Sum of distance to all zombies without vaccine
-        04. Distance to the nearest obstcale with vaccine
-        05. Distance to the nearest obstcale without vaccine
-        06. sum of distance to all obstcales with vaccine + pit
-        07. sum of distance to all obstcales without vaccine + pit
-        08. Distance to the exit port with vaccine
-        09. Distance to the exit port without vaccine
-        10. Distance to the pit with vaccine
-        11. Distance to the pit without vaccine
-        12. number of shot left with vaccine
-        13. number of shot left without vaccine
-        14. number of zombies in distance 2 with vaccine
-        15. number of zombies in distance 2 without vaccine
-        16. number of shots left
-        17. can agent shoot with vaccine
-        18. can agent shoot without vaccine
-        19. Distance to vaccine without vaccine
-        20. Distance to exit port when no zombie left
-        21. Number of possible move with vaccine
-        22. Number of possible move without vaccine
+        00. Distance to the nearest zombie in mid range with vaccine
+        01. Distance to the nearest zombie in mid range without vaccine
+        02. Sum of distance to all zombies in mid range with vaccine
+        03. Sum of distance to all zombies in mid range without vaccine
+        04. Distance to the nearest obstcale in mid range without vaccine
+        05. sum of distance to all obstcales in mid range without vaccine + pit
+        06. Distance to the pit in mid range with vaccine
+        07. Distance to the pit in mid range without vaccine
+        08. number of shot left with vaccine
+        09. number of shot left without vaccine
+        10. number of zombies in close range with vaccine
+        11. number of zombies in close range without vaccine
+        12. number of shots left
+        13. can agent shoot with vaccine
+        14. can agent shoot without vaccine
+        15. Distance to vaccine without vaccine
+        16. Distance to exit port when no zombie left
+        17. Number of possible move with vaccine
+        18. Number of possible move without vaccine
+        19. Euclidean distance to the nearest zombie with vaccine
+        20. Euclidean distance to the nearest zombie without vaccine
+        21. Distance to the nearest zombie in close range with vaccine
+        22. Distance to the nearest zombie in close range without vaccine
         """
         self.agent_weights = np.random.rand(23)
 
-        # 20. Distance to exit port when no zombie left
-        self.agent_weights[20] = -1000
+        # 13. can agent shoot with vaccine
+        self.agent_weights[13] = 10
+        # 14. can agent shoot without vaccine
+        self.agent_weights[14] = 20
 
-        # 10. Distance to the pit with vaccine
-        self.agent_weights[10] = 100
-        # 11. Distance to the pit without vaccine
-        self.agent_weights[11] = 100
+        # 16. Distance to exit port when no zombie left
+        self.agent_weights[16] = -100
 
-        # 19. Distance to vaccine without vaccine
-        self.agent_weights[19] = -1000
-        # 00. Distance to the nearest zombie with vaccine
-        self.agent_weights[0] = -1500
-        # 01. Distance to the nearest zombie without vaccine
-        self.agent_weights[1] = 1100
-        # 22. Number of possible move without vaccine
-        self.agent_weights[22] = 200  # Go where there is more moves
+        # 06. Distance to the pit in mid range with vaccine
+        self.agent_weights[6] = 30
+        # 07. Distance to the pit in mid range without vaccine
+        self.agent_weights[7] = 30
+
+        # 15. Distance to vaccine without vaccine
+        self.agent_weights[15] = -300
+        # 00. Distance to the nearest zombie in mid range with vaccine
+        self.agent_weights[0] = -30
+        # 01. Distance to the nearest zombie in mid range without vaccine
+        self.agent_weights[1] = 12
+        # 03. Sum of distance to all zombies in mid range without vaccine
+        self.agent_weights[3] = 8
+        # 18. Number of possible move without vaccine
+        self.agent_weights[18] = 40  # Go where there is more moves
+        # 19. Euclidean distance to the nearest zombie with vaccine
+        self.agent_weights[19] = -800
+        # 20. Euclidean distance to the nearest zombie without vaccine
+        self.agent_weights[20] = 20
+        # 21. Distance to the nearest zombie in close range with vaccine
+        self.agent_weights[21] = -20
+        # 22. Distance to the nearest zombie in close range without vaccine
+        self.agent_weights[22] = 70
 
         self.agent_weights
         self.Qotr = self.board.board_height + self.board.board_width
         self.agent_value_normalizer = np.array(
             [
-                # 00. Distance to the nearest zombie with vaccine
-                self.Qotr,
-                # 01. Distance to the nearest zombie without vaccine
-                self.Qotr,
-                # 02. Sum of distance to all zombies with vaccine
-                self.Qotr * self.n_zombie,
-                # 03. Sum of distance to all zombies without vaccine
-                self.Qotr * self.n_zombie,
-                # 04. Distance to the nearest obstcale with vaccine
-                self.Qotr,
-                # 05. Distance to the nearest obstcale without vaccine
-                self.Qotr,
-                # 06. sum of distance to all obstcales with vaccine
-                self.Qotr * self.board.n_obstcale,
-                # 07. sum of distance to all obstcales without vaccine
-                self.Qotr * self.board.n_obstcale,
-                # 08. Distance to the exit port with vaccine
-                self.Qotr,
-                # 09. Distance to the exit port without vaccine
-                self.Qotr,
-                # 10. Distance to the pit with vaccine
-                self.Qotr,
-                # 11. Distance to the pit without vaccine
-                self.Qotr,
-                # 12. number of shot left with vaccine
+                # 00. Distance to the nearest zombie in mid range with vaccine
+                self.agent.mid_range,
+                # 01. Distance to the nearest zombie in mid range without vaccine
+                self.agent.mid_range,
+                # 02. Sum of distance to all zombies in mid range with vaccine
+                self.agent.mid_range * self.n_zombie,
+                # 03. Sum of distance to all zombies in mid range without vaccine
+                self.agent.mid_range * self.n_zombie,
+                # 04. Distance to the nearest obstcale in mid range without vaccine
+                self.agent.mid_range,
+                # 05. sum of distance to all obstcales in mid range without vaccine + pit
+                self.agent.mid_range * self.board.n_obstcale,
+                # 06. Distance to the pit in mid range with vaccine
+                self.agent.mid_range,
+                # 07. Distance to the pit in mid range without vaccine
+                self.agent.mid_range,
+                # 08. number of shot left with vaccine
                 self.shot_left,
-                # 13. number of shot left without vaccine
+                # 09. number of shot left without vaccine
                 self.shot_left,
-                # 14. number of zombies in distance 2 with vaccine
+                # 10. number of zombies in close range with vaccine
                 self.n_zombie,
-                # 15. number of zombies in distance 2 without vaccine
+                # 11. number of zombies in close range without vaccine
                 self.n_zombie,
-                # 16. number of shots left
+                # 12. number of shots left
                 self.shot_left,
-                # 17. can agent shoot with vaccine
-                1,
-                # 18. can agent shoot without vaccine
-                1,
-                # 19. Distance to vaccine without vaccine
+                # 13. can agent shoot with vaccine
+                self.n_shot,
+                # 14. can agent shoot without vaccine
+                self.n_shot,
+                # 15. Distance to vaccine without vaccine
                 self.Qotr,
-                # 20. Distance to exit port when no zombie left
+                # 16. Distance to exit port when no zombie left
                 self.Qotr,
-                # 21. Number of possible move with vaccine
+                # 17. Number of possible move with vaccine
                 4,
-                # 22. Number of possible move without vaccine
+                # 18. Number of possible move without vaccine
                 4,
+                # 19. Euclidean distance to the nearest zombie with vaccine
+                self.Qotr,
+                # 20. Euclidean distance to the nearest zombie without vaccine
+                self.Qotr,
+                # 21. Distance to the nearest zombie in close range with vaccine
+                self.agent.close_range,
+                # 22. Distance to the nearest zombie in close range without vaccine
+                self.agent.close_range,
             ]
         )
 
@@ -234,29 +249,61 @@ class pacmanz:
         pass
 
     def play(self):
+        # self.load_weights()
         # Reset game
         self.reset()
 
-        # Play game
+        self.pre_agent_score = 0
+        self.pre_pre_agent_score = 0
+
+        # Play gamex
         while True:
-            # wait 200 ms
-            time.sleep(500 * 1e-3)
-
             self.n_iteration += 1
-            # Move agent
+            if self.n_iteration == 1:
+                self.n_game += 1
+            # Move Zombie
             for i in range(self.zombie_left):
-                print(f"Value Zombie {i}: ", self.zombie[i].move())
-            # self.agent.move()
-            print("Value Agent: ", self.agent.move())
+                zombie_score = self.zombie[i].move()
+                if self.board.show_time:
+                    # wait self.delay ms
+                    time.sleep(self.delay * 1e-3)
+                    print(f"Value Zombie {i}: ", zombie_score)
 
-            if self.n_iteration > self.max_iteration:
-                print("Game Over")
+            for i in range(4):
+                agent_score = self.agent.move()
+                if self.board.show_time:
+                    # wait self.delay ms
+                    time.sleep(self.delay * 3 * 1e-3)
+                    print("Value Agent: ", agent_score)
+            # if self.n_iteration > self.max_iteration:
+            if agent_score == self.pre_pre_agent_score:
+                print("Game Over With Loop")
                 # update agent
                 self.agent.update_weights_and_reset(is_win=False)
-                self.n_game += 1
+                # Store weights
+                self.save_weights()
+            else:
+                self.pre_pre_agent_score = self.pre_agent_score
+                self.pre_agent_score = agent_score
 
         pass
 
+    def save_weights(self):
+        """
+        Save zombie weights in zombie.csv and agent weights in agent.csv
+        """
+        np.savetxt("weights/zombie.csv", self.zombie_weights, delimiter=",")
+        np.savetxt("weights/agent.csv", self.agent_weights, delimiter=",")
+        pass
 
-game = pacmanz(10, 15, 4, 30, 3)
+    def load_weights(self):
+        """
+        Load zombie weights from zombie.csv and agent weights from agent.csv
+        """
+        self.zombie_weights = np.loadtxt("weights/zombie.csv", delimiter=",")
+        self.agent_weights = np.loadtxt("weights/agent.csv", delimiter=",")
+        pass
+
+
+game = pacmanz(10, 15, 4, 10, 3)
 game.play()
