@@ -9,15 +9,33 @@ class pacmanz:
     def __init__(
         self, board_height, board_width, n_zombie, n_obstcale, n_shot
     ):
-        self.D = np.array([[0, 1], [1, 0], [0, -1], [-1, 0]])
+        self.dir_4 = np.array([[0, 1], [1, 0], [0, -1], [-1, 0]])
+        self.dir_4x2 = np.array([[0, 2], [2, 0], [0, -2], [-2, 0]])
+        self.dir_8 = np.array(
+            [
+                [0, 1],
+                [1, 1],
+                [1, 0],
+                [1, -1],
+                [0, -1],
+                [-1, -1],
+                [-1, 0],
+                [-1, 1],
+            ]
+        )
         self.n_shot = n_shot
         self.shot_left = n_shot
         self.n_zombie = n_zombie
         self.zombie_left = n_zombie
         self.agent_has_vaccine = False
-        self.win_reward = 1000
-        self.lose_reward = -1000
+
         self.score = 0
+        self.agent_win_reward = 1000
+        self.agent_lose_reward = -1000
+        self.zombie_win_reward = 1000
+        self.zombie_lose_reward = -1000
+        self.zombie_regenerate_reward = -100
+
         self.vaccinate_score = 100
         self.learning_rate = 1e-2
         self.n_iteration = 0
@@ -34,6 +52,7 @@ class pacmanz:
         self.board.update_whole_board()
 
         self.create_agent_feature()
+        self.create_zombie_feature()
 
         pass
 
@@ -45,8 +64,8 @@ class pacmanz:
         03. Sum of distance to all zombies without vaccine
         04. Distance to the nearest obstcale with vaccine
         05. Distance to the nearest obstcale without vaccine
-        06. sum of distance to all obstcales with vaccine
-        07. sum of distance to all obstcales without vaccine
+        06. sum of distance to all obstcales with vaccine + pit
+        07. sum of distance to all obstcales without vaccine + pit
         08. Distance to the exit port with vaccine
         09. Distance to the exit port without vaccine
         10. Distance to the pit with vaccine
@@ -55,30 +74,28 @@ class pacmanz:
         13. number of shot left without vaccine
         14. number of zombies in distance 2 with vaccine
         15. number of zombies in distance 2 without vaccine
-        16. agent has vaccine
-        17. agent has no vaccine
-        18. number of zombies left
-        19. number of shots left
-        20. can agent shoot with vaccine
-        21. can agent shoot without vaccine
-        22. Distance to vaccine with vaccine
-        23. Distance to vaccine without vaccine
-        24. Distance to exit port when no zombie left
+        16. number of shots left
+        17. can agent shoot with vaccine
+        18. can agent shoot without vaccine
+        19. Distance to vaccine without vaccine
+        20. Distance to exit port when no zombie left
         """
-        self.agent_weights = np.random.rand(25)
+        self.agent_weights = np.random.rand(21)
 
-        # 24. Distance to exit port when no zombie left
-        self.agent_weights[24] = -1000
+        # 20. Distance to exit port when no zombie left
+        self.agent_weights[20] = -1000
 
         # 10. Distance to the pit with vaccine
-        self.agent_weights[10] = 500
+        self.agent_weights[10] = 100
         # 11. Distance to the pit without vaccine
-        self.agent_weights[11] = 500
+        self.agent_weights[11] = 100
 
-        # 23. Distance to vaccine without vaccine
-        self.agent_weights[23] = -1000
+        # 19. Distance to vaccine without vaccine
+        self.agent_weights[19] = -1000
         # 00. Distance to the nearest zombie with vaccine
-        self.agent_weights[0] = -1000
+        self.agent_weights[0] = -1500
+        # 01. Distance to the nearest zombie without vaccine
+        self.agent_weights[1] = 1100
 
         self.agent_weights
         self.Qotr = self.board.board_height + self.board.board_width
@@ -116,24 +133,61 @@ class pacmanz:
                 self.n_zombie,
                 # 15. number of zombies in distance 2 without vaccine
                 self.n_zombie,
-                # 16. agent has vaccine
-                1,
-                # 17. agent has no vaccine
-                1,
-                # 18. number of zombies left
-                self.n_zombie,
-                # 19. number of shots left
+                # 16. number of shots left
                 self.shot_left,
-                # 20. can agent shoot with vaccine
+                # 17. can agent shoot with vaccine
                 1,
-                # 21. can agent shoot without vaccine
+                # 18. can agent shoot without vaccine
                 1,
-                # 22. Distance to vaccine with vaccine
+                # 19. Distance to vaccine without vaccine
                 self.Qotr,
-                # 23. Distance to vaccine without vaccine
+                # 20. Distance to exit port when no zombie left
                 self.Qotr,
-                # 24. Distance to exit port when no zombie left
+            ]
+        )
+
+    def create_zombie_feature(self):
+        """
+        00. Distance to the pit with vaccine
+        01. Distance to the pit without vaccine
+        02. Sum distance to all obstcales + distance to pit with vaccine
+        03. Sum distance to all obstcales + distance to pit without vaccine
+        04. Distance to the nearest obstcale with vaccine
+        05. Distance to the nearest obstcale without vaccine
+        06. Distance to the agent with vaccine
+        07. Distance to the agent without vaccine
+        08. Sum distance to all zombies when agent has vaccine
+        09. Sum distance to all zombies when agent has no vaccine
+        """
+        self.zombie_weights = np.random.rand(10)
+
+        # 07. Distance to the agent without vaccine
+        self.zombie_weights[7] = -1000
+        # 06. Distance to the agent with vaccine
+        self.zombie_weights[6] = 1000
+
+        self.zombie_value_normalizer = np.array(
+            [
+                # 00. Distance to the pit with vaccine
                 self.Qotr,
+                # 01. Distance to the pit without vaccine
+                self.Qotr,
+                # 02. Sum distance to all obstcales + distance to pit with vaccine
+                self.Qotr * (self.board.n_obstcale + 1),
+                # 03. Sum distance to all obstcales + distance to pit without vaccine
+                self.Qotr * (self.board.n_obstcale + 1),
+                # 04. Distance to the nearest obstcale with vaccine
+                self.Qotr,
+                # 05. Distance to the nearest obstcale without vaccine
+                self.Qotr,
+                # 06. Distance to the agent without vaccine
+                self.Qotr,
+                # 07. Distance to the agent with vaccine
+                self.Qotr,
+                # 08. Sum distance to all zombies when agent has vaccine
+                self.Qotr * (self.n_zombie - 1),
+                # 09. Sum distance to all zombies when agent has no vaccine
+                self.Qotr * (self.n_zombie - 1),
             ]
         )
 
@@ -177,15 +231,15 @@ class pacmanz:
 
         # Play game
         while True:
-            # wait 10ms
-            time.sleep(0.01)
-
-
+            # wait 200 ms
+            time.sleep(500 * 1e-3)
 
             self.n_iteration += 1
             # Move agent
+            for i in range(self.zombie_left):
+                print(f"Value Zombie {i}: ", self.zombie[i].move())
             # self.agent.move()
-            print(self.agent.move())
+            print("Value Agent: ", self.agent.move())
 
             if self.n_iteration > self.max_iteration:
                 print("Game Over")
@@ -196,5 +250,5 @@ class pacmanz:
         pass
 
 
-game = pacmanz(10, 10, 4, 10, 3)
+game = pacmanz(10, 15, 4, 40, 3)
 game.play()

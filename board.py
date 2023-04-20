@@ -108,6 +108,12 @@ class board:
         self.generate_vaccine()
         pass
 
+    def update_cell(self, x, y, symbol, color):
+        # Update cell
+        self.board[x, y] = symbol
+        self.create_rect(color, x, y)
+        pass
+    
     def create_rect(self, color, x, y):
         pygame.draw.rect(
             self.screen,
@@ -122,7 +128,7 @@ class board:
         # Update screen
         pygame.display.update()
         pass
-
+    
     def init_pygame(self):
         # Initialize pygame
         pygame.init()
