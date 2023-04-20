@@ -157,6 +157,8 @@ class agent:
             self.pacmanz.agent_has_vaccine,
         )
 
+        number_of_possible_move = len(self.possible_moves())
+
         values = np.array(
             [
                 # 00. Distance to the nearest zombie with vaccine
@@ -229,6 +231,14 @@ class agent:
                 else 0,
                 # 20. Distance to exit port when no zombie left
                 distance_to_exit_port if self.pacmanz.zombie_left == 0 else 0,
+                # 21. Number of possible moves with vaccine
+                number_of_possible_move
+                if not self.pacmanz.agent_has_vaccine
+                else 0,
+                # 22. Number of possible moves without vaccine
+                number_of_possible_move
+                if self.pacmanz.agent_has_vaccine
+                else 0,
             ]
         )
 

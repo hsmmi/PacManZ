@@ -79,8 +79,10 @@ class pacmanz:
         18. can agent shoot without vaccine
         19. Distance to vaccine without vaccine
         20. Distance to exit port when no zombie left
+        21. Number of possible move with vaccine
+        22. Number of possible move without vaccine
         """
-        self.agent_weights = np.random.rand(21)
+        self.agent_weights = np.random.rand(23)
 
         # 20. Distance to exit port when no zombie left
         self.agent_weights[20] = -1000
@@ -96,6 +98,8 @@ class pacmanz:
         self.agent_weights[0] = -1500
         # 01. Distance to the nearest zombie without vaccine
         self.agent_weights[1] = 1100
+        # 22. Number of possible move without vaccine
+        self.agent_weights[22] = 200  # Go where there is more moves
 
         self.agent_weights
         self.Qotr = self.board.board_height + self.board.board_width
@@ -143,6 +147,10 @@ class pacmanz:
                 self.Qotr,
                 # 20. Distance to exit port when no zombie left
                 self.Qotr,
+                # 21. Number of possible move with vaccine
+                4,
+                # 22. Number of possible move without vaccine
+                4,
             ]
         )
 
@@ -250,5 +258,5 @@ class pacmanz:
         pass
 
 
-game = pacmanz(10, 15, 4, 40, 3)
+game = pacmanz(10, 15, 4, 30, 3)
 game.play()
