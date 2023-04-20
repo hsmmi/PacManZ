@@ -5,6 +5,7 @@ class agent:
     def __init__(self, pacmanz):
         self.pacmanz = pacmanz
         self.position_agent = self.pacmanz.board.find_empty_cell()
+        self.pre_position_agent = self.position_agent
         self.pacmanz.board.board[
             self.position_agent[0], self.position_agent[1]
         ] = self.pacmanz.board.s_agent
@@ -311,21 +312,26 @@ class agent:
         """
         update weights
         """
-        state_value, values = self.state_value()
+        self.position_agent = self.pre_position_agent
+        pre_state_value, pre_values = self.state_value()
+
         if is_win:
             self.pacmanz.agent_weights += (
                 self.pacmanz.learning_rate
-                * (self.pacmanz.agent_win_reward - state_value)
-                * values
+                * (self.pacmanz.agent_win_reward - pre_state_value)
+                * pre_values
             )
             print("Agent Win")
+            print(f"Score: {self.pacmanz.score}\n{'-' * 20}")
         else:
             self.pacmanz.agent_weights += (
                 self.pacmanz.learning_rate
-                * (self.pacmanz.agent_lose_reward - state_value)
-                * values
+                * (self.pacmanz.agent_lose_reward - pre_state_value)
+                * pre_values
             )
             print("Agent Lose")
+            print(f"Score: {self.pacmanz.score}\n{'-' * 20}")
+
         # reset game
         self.pacmanz.reset()
 
@@ -378,6 +384,7 @@ class agent:
         if self.pacmanz.shot_left == 0:
             return
         self.pacmanz.shot_left -= 1
+        self.pacmanz.score += self.pacmanz.score_shoot_zombie
         self.pacmanz.zombie[zombie_id].update_weights_and_reset(
             is_win=False, is_in_pit=False
         )
@@ -406,6 +413,7 @@ class agent:
                     == self.position_agent[1] + dir[1]
                 ):
                     # Vaccinate zombie
+                    self.pacmanz.score += self.pacmanz.score_vaccinate_zombie
                     self.pacmanz.agent_has_vaccine = False
                     self.pacmanz.zombie[zombie_id].update_weights_and_reset(
                         is_win=False, is_in_pit=False
@@ -460,6 +468,7 @@ class agent:
             self.update_weights_and_reset(is_win=False)
             return self.state_value()
 
+        self.pre_position_agent = self.position_agent
         # Do move
         self.position_agent[0] += best_action[0]
         self.position_agent[1] += best_action[1]
@@ -480,6 +489,7 @@ class agent:
             # Check if agent hasn't vaccine
             if not self.pacmanz.agent_has_vaccine:
                 self.pacmanz.agent_has_vaccine = True
+                self.pacmanz.score += self.pacmanz.score_get_vaccine
                 # Generate new vaccine
                 self.pacmanz.board.generate_vaccine()
 

@@ -192,6 +192,7 @@ class zombie:
         Regenerate zombie
         """
         self.position_zombie = self.pacmanz.board.find_empty_cell()
+        self.pacmanz.score += self.pacmanz.score_regenerate_zombie
 
     def update_weights_and_reset(self, is_win, is_in_pit) -> None:
         """
@@ -222,6 +223,8 @@ class zombie:
                 * pre_values
             )
             print("Zombie Killed Agent")
+            print(f"Score: {self.pacmanz.score}\n{'-' * 20}")
+
             # Reset game
             self.pacmanz.reset()
 

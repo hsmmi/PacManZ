@@ -7,7 +7,7 @@ import pygame
 
 class board:
     def __init__(self, board_height, board_width, n_obstcale) -> None:
-        self.show_time = True
+        self.show_time = False
         # Store initial values
         self.board_height = board_height
         self.board_width = board_width
@@ -116,7 +116,7 @@ class board:
     def update_cell(self, x, y, symbol, color):
         # Update cell
         self.board[x, y] = symbol
-        
+
         self.create_rect(color, x, y)
         pass
 

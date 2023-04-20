@@ -30,6 +30,11 @@ class pacmanz:
         self.agent_has_vaccine = False
 
         self.score = 0
+        self.score_get_vaccine = 100
+        self.score_vaccinate_zombie = 500
+        self.score_shoot_zombie = 400
+        self.score_regenerate_zombie = 100
+
         self.agent_win_reward = 1000
         self.agent_lose_reward = -1000
         self.zombie_win_reward = 1000
@@ -249,7 +254,7 @@ class pacmanz:
         pass
 
     def play(self):
-        # self.load_weights()
+        self.load_weights()
         # Reset game
         self.reset()
 
@@ -278,6 +283,7 @@ class pacmanz:
             # if self.n_iteration > self.max_iteration:
             if agent_score == self.pre_pre_agent_score:
                 print("Game Over With Loop")
+                print(f"Score: {self.score}\n{'-' * 20}")
                 # update agent
                 self.agent.update_weights_and_reset(is_win=False)
                 # Store weights
